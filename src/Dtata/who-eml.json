@@ -1,0 +1,23 @@
+[
+  {
+    "generic": "Paracetamol",
+    "variants": [
+      "Tablet Paracetamol",
+      "Syrup Paracetamol",
+      "Injection Paracetamol"
+    ]
+  },
+  {
+    "generic": "Amoxicillin",
+    "variants": [
+      "Capsule Amoxicillin",
+      "Syrup Amoxicillin"
+    ]
+  },
+  {
+    "generic": "Ceftriaxone",
+    "variants": [
+      "Injection Ceftriaxone"
+    ]
+  }
+]
