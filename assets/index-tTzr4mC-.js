@@ -46,8 +46,7 @@ Minimum version required to store current data is: `+H+`.
 <div class="page">
 
   <div class="header">
-<<<<<<< HEAD
-=======
+  
     <div class="logo"><img src="${s}" alt="Clinic Logo" /></div>
 >>>>>>> 1542759 (feat: initial full clinic app release)
     <div class="clinic-info">
