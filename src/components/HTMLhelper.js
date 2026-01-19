@@ -1,0 +1,129 @@
+export const generateFooterActionHtml = ({ patient, logo, qrDataUrl, date, time, rxId }) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prescription</title>
+<style>
+  @page { size: A4; margin: 0; }
+  body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #000; }
+  .page { box-sizing: border-box; border: 1px solid #000; padding: 10px; width: 210mm; height: 297mm; display: flex; flex-direction: column; }
+  .header { height: 10%; display: flex; align-items: center; border-bottom: 1px solid #000; padding: 0 10px; }
+  .logo { flex: 0 0 15%; }
+  .logo img { max-height: 80px; }
+  .clinic-info { flex: 1; text-align: center; }
+  .clinic-info h1 { margin: 0; font-size: 22px; }
+  .clinic-info h2 { margin: 2px 0; font-size: 14px; }
+  .patient-info { padding: 5px 10px; font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; border-bottom: 1px solid #000; }
+  .body { display: flex; flex: 1; border-bottom: 1px solid #000; }
+  .left { flex: 0 0 30%; border-right: 1px solid #000; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; }
+  .right { flex: 0 0 70%; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+  h2 { font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #000; padding-bottom: 3px; }
+  ul { padding-left: 18px; margin-top: 5px; flex: 1; overflow-y: auto; }
+  li { margin-bottom: 3px; }
+  .drug-box { width: 80%; margin: 0 auto; text-align: left; padding: 10px; }
+  .doctor-sign { margin-top: auto; text-align: center; font-size: 14px; }
+  .footer { height: 10%; padding: 10px; box-sizing: border-box; font-size: 14px; }
+  .drug-item { padding-top: 10px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="logo"><img src="${logo}" alt="Clinic Logo" /></div>
+    <div class="clinic-info">
+      <h1>Dr. Zahra Saami دوکتورس زهرا سامع</h1>
+      <h2>معالج امراض نسایی ولادی و التراسوند</h2>
+      <h2>Obstetrics and Gynecology and Ultrasound Specialist</h2>
+    </div>
+  </div>
+
+  <div class="patient-info">
+    <div><strong>Name:</strong> ${patient.name}</div>
+    <div><strong>Age:</strong> ${patient.age}</div>
+    <div><strong>Gender:</strong> ${patient.gender}</div>
+    <div><strong>Weight:</strong> ${patient.weight ? patient.weight + " kg" : "-"}</div>
+    <div><strong>Married:</strong> ${patient.married ? "Yes" : "No"}</div>
+    ${
+      patient.married
+        ? `<div><strong>Pregnant:</strong> ${patient.pregnant ? "Yes" : "No"}</div>
+           <div><strong>Lactating:</strong> ${patient.lactating ? "Yes" : "No"}</div>`
+        : ""
+    }
+    <div><strong>Disability:</strong> ${patient.disability || "-"}</div>
+  </div>
+
+  <div class="body">
+    <div class="left">
+      <div><strong>Date:</strong> ${date}</div>
+      <div><strong>Time:</strong> ${time}</div>
+
+      ${
+        patient.vitalSigns && (patient.vitalSigns.bp || patient.vitalSigns.pr || patient.vitalSigns.rr || patient.vitalSigns.temp)
+          ? `<h2>Vital Signs</h2>
+             <ul>
+               ${patient.vitalSigns.bp ? `<li>BP: ${patient.vitalSigns.bp} mmHg</li>` : ""}
+               ${patient.vitalSigns.pr ? `<li>PR: ${patient.vitalSigns.pr} /min</li>` : ""}
+               ${patient.vitalSigns.rr ? `<li>RR: ${patient.vitalSigns.rr} /min</li>` : ""}
+               ${patient.vitalSigns.temp ? `<li>Temp: ${patient.vitalSigns.temp} °C</li>` : ""}
+             </ul>`
+          : ""
+      }
+
+      ${
+        patient.labResults && patient.labResults.some(r => r.test.trim() || r.value.trim())
+          ? `<h2>Lab Results</h2>
+             <ul>
+               ${patient.labResults
+                 .filter(r => r.test.trim() || r.value.trim())
+                 .map(r => `<li>${r.test}: ${r.value}</li>`)
+                 .join("")}
+             </ul>`
+          : ""
+      }
+
+      <h2>Diagnosis</h2>
+      <ul>${patient.diagnosis?.filter(d => d.trim()).map(d => `<li>${d}</li>`).join("")}</ul>
+
+      <div class="qr-code" style="margin-top:12px; text-align:center;">
+        ${
+          qrDataUrl
+            ? `<img src="${qrDataUrl}" alt="QR Code" style="width:120px; height:120px; object-fit:contain;" />`
+            : `<p style="font-size:12px;">QR Code موجود نیست</p>`
+        }
+        <p style="margin-bottom:6px; font-size:13px; line-height:1.4;">QR Code</p>
+      </div>
+
+    </div>
+
+    <div class="right">
+      <div class="drug-box">
+        <h2>Rx</h2>
+        ${
+          patient.medications?.filter(m => m.name.trim()).map(
+            m => `<div class="drug-item">
+                    <strong>${m.form || "Tab"} ${m.name}</strong> ${m.doseValue} ${m.doseUnit}<br/>
+                    ${m.frequency} | ${m.duration} days | ${m.usage}<br/>
+                    Notes: ${m.notes || "-"}
+                  </div>`
+          ).join("")
+        }
+      </div>
+
+      <div class="doctor-sign">
+        <p>Doctor's Signature</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <strong>Doctor Advice:</strong> ${patient.advice || "-"}
+    <p>آدرس: چهاراهی دوغ آباد, کلنیک رحمت | اوقات کاری: 08:صبح الی 01:00 بعد از ظهر
+    <br> شماره تماس: +93700561034 | +93749847103</p>
+  </div>
+
+</div>
+</body>
+</html>
+`;

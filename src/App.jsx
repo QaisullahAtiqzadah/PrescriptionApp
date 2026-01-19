@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useEffect } from "react";
 import PatientInfo from "./sections/PatientInfo";
 import Symptoms from "./sections/Symptoms";
@@ -11,39 +12,23 @@ import Activate from "./Activate";
 import { isActivated } from "./utils/activation.js";
 import "./App.css";
 
-// IndexedDB constants
-const DB_NAME = "clinicDB";
-const STORE_NAME = "prescriptions";
-const DB_VERSION = 2;
-
-
-
-// Open the prescriptions store
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
+import {
+  addPrescription,
+  getAllPrescriptions,
+  deletePrescription as dbDeletePrescription,
+} from "./DB/db.js"; // centralized DB functions
 
 export default function App() {
   const [activated, setActivated] = useState(null);
   const [loading, setLoading] = useState(true);
 
-
-    useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         const active = await isActivated();
         setActivated(active);
-      } catch {
+      } catch (err) {
+        console.error("Activation check failed:", err);
         setActivated(false);
       } finally {
         setLoading(false);
@@ -77,47 +62,42 @@ export default function App() {
     localStorage.setItem("darkMode", darkMode);
   }, [darkMode]);
 
-  // Check activation on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const active = await isActivated();
-        setActivated(active); // true if already activated
-      } catch {
-        setActivated(false);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  // Load prescriptions from IndexedDB
+  // Load prescriptions from centralized DB
   const loadPastPrescriptions = async () => {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.getAll();
-    req.onsuccess = () => setPastPrescriptions(req.result || []);
+    try {
+      const all = await getAllPrescriptions();
+      setPastPrescriptions(all || []);
+    } catch (err) {
+      console.error("Failed to load prescriptions:", err);
+      setPastPrescriptions([]);
+    }
   };
 
   useEffect(() => {
     loadPastPrescriptions();
   }, []);
 
-  // Save a prescription
+  // Save a prescription (uses centralized addPrescription)
   const savePrescription = async (record) => {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).add({ ...record, savedAt: new Date().toISOString() });
-    tx.oncomplete = loadPastPrescriptions;
+    try {
+      const res = await addPrescription(record);
+      // refresh list
+      await loadPastPrescriptions();
+      return res;
+    } catch (err) {
+      console.error("Failed to save prescription:", err);
+      throw err;
+    }
   };
 
-  // Delete a prescription
+  // Delete a prescription (uses centralized delete)
   const deletePrescription = async (id) => {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(id);
-    tx.oncomplete = loadPastPrescriptions;
+    try {
+      await dbDeletePrescription(id);
+      await loadPastPrescriptions();
+    } catch (err) {
+      console.error("Failed to delete prescription:", err);
+    }
   };
 
   // Load a past prescription into the form
@@ -140,30 +120,30 @@ export default function App() {
       labResults: [{ test: "", value: "" }],
       vitalSigns: { bp: "", pr: "", rr: "", temp: "" },
     });
-     // Disable right-click and prevent inspect shortcuts
+
+  // Disable right-click and prevent inspect shortcuts
   useEffect(() => {
-  const handleContextMenu = (e) => e.preventDefault();
+    const handleContextMenu = (e) => e.preventDefault();
 
-  const handleKeyDown = (e) => {
-    if (
-      e.key === "F12" ||
-      (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
-      (e.ctrlKey && e.key.toUpperCase() === "U")
-    ) {
-      e.preventDefault();
-      alert("Inspect disabled!");
-    }
-  };
+    const handleKeyDown = (e) => {
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
+        (e.ctrlKey && e.key.toUpperCase() === "U")
+      ) {
+        e.preventDefault();
+        alert("Inspect disabled!");
+      }
+    };
 
-  document.addEventListener("contextmenu", handleContextMenu);
-  document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown);
 
-  // ✅ Cleanup function
-  return () => {
-    document.removeEventListener("contextmenu", handleContextMenu);
-    document.removeEventListener("keydown", handleKeyDown);
-  };
-}, []); // <-- this is correct, no trailing comma after []
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   // Show loading or activation screen
   if (loading) return <p>Loading...</p>;
@@ -172,23 +152,22 @@ export default function App() {
   // Main app content
   return (
     <div>
-    <div className="theme-toggle">
-  <input
-    type="checkbox"
-    id="toggle"
-    checked={darkMode}
-    onChange={() => setDarkMode(!darkMode)}
-  />
+      <div className="theme-toggle">
+        <input
+          type="checkbox"
+          id="toggle"
+          checked={darkMode}
+          onChange={() => setDarkMode(!darkMode)}
+        />
 
-  <label htmlFor="toggle" className="toggle-label">
-    <div className="icons">
-      <span className="sun">☀️</span>
-      <span className="moon">🌙</span>
-    </div>
-    <div className="ball" />
-  </label>
-</div>
-
+        <label htmlFor="toggle" className="toggle-label">
+          <div className="icons">
+            <span className="sun">☀️</span>
+            <span className="moon">🌙</span>
+          </div>
+          <div className="ball" />
+        </label>
+      </div>
 
       <PatientInfo data={patient} onChange={handleFieldChange} setValid={setPatientInfoValid} />
       <Symptoms data={patient} onChange={handleFieldChange} setValid={setSymptomsValid} />

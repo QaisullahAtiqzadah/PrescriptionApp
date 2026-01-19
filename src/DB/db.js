@@ -5,9 +5,9 @@ const DB_NAME = "ClinicDB";
 const DB_VERSION = 2;
 
 // Object store names
-const PRESCRIPTION_STORE = "prescriptions";
-const NOTES_STORE = "notes";
-const ACTIVATION_STORE = "activation";
+export const PRESCRIPTION_STORE = "prescriptions";
+export const NOTES_STORE = "notes";
+export const ACTIVATION_STORE = "activation";
 
 /* =========================
    Initialize IndexedDB
@@ -23,7 +23,8 @@ export const initDB = async () => {
         });
         store.createIndex("patientName", "patient.name");
         store.createIndex("createdAt", "createdAt");
-        store.createIndex("rxId", "rxId", { unique: true }); // <--- add rxId index
+        // NOTE: do NOT create rxId as unique to avoid upgrade failure if duplicates exist
+        store.createIndex("rxId", "rxId");
       }
 
       // Notes store
@@ -52,8 +53,25 @@ export const addPrescription = async (patientRecord) => {
 
   const tx = db.transaction(PRESCRIPTION_STORE, "readwrite");
   const store = tx.store;
-  const id = await store.add(record); // add record
-  await tx.done; // <--- ensures the transaction is fully committed
+
+  // Check for duplicate rxId first (to avoid add() throwing)
+  if (record.rxId) {
+    try {
+      const existing = await store.index("rxId").get(record.rxId);
+      if (existing) {
+        // If existing found, return existing id (or update depending on policy)
+        // Here we avoid throwing: return existing
+        await tx.done;
+        return { ...existing };
+      }
+    } catch (err) {
+      // If index lookup fails for any reason, continue to attempt add
+      console.warn("rxId index read failed:", err);
+    }
+  }
+
+  const id = await store.add(record);
+  await tx.done;
   return { ...record, id };
 };
 
@@ -73,8 +91,10 @@ export const searchPrescriptionsByName = async (name) => {
   const tx = db.transaction(PRESCRIPTION_STORE, "readonly");
   const index = tx.store.index("patientName");
   const allRecords = await index.getAll();
-  await tx.done; // ensure transaction completes
-  return allRecords.filter(r => r.patient.name.toLowerCase().includes(name.toLowerCase()));
+  await tx.done;
+  return allRecords.filter((r) =>
+    r.patient?.name?.toLowerCase().includes(name.toLowerCase())
+  );
 };
 
 export const deletePrescription = async (id) => {
@@ -90,19 +110,22 @@ export const deletePrescription = async (id) => {
 export const addNote = async (text) => {
   if (!text?.trim()) return null;
   const db = await initDB();
-  const store = db.transaction(NOTES_STORE, "readwrite").objectStore(NOTES_STORE);
+  const tx = db.transaction(NOTES_STORE, "readwrite");
+  const store = tx.store;
   const existing = await store.index("noteText").get(text);
   if (!existing) {
     const id = await store.add({ text });
+    await tx.done;
     return id;
   }
+  await tx.done;
   return null;
 };
 
 export const getAllNotes = async () => {
   const db = await initDB();
   const allNotes = await db.getAll(NOTES_STORE);
-  return allNotes.map(n => n.text);
+  return allNotes.map((n) => n.text);
 };
 
 export const deleteNote = async (id) => {
@@ -114,6 +137,7 @@ export const deleteNote = async (id) => {
 
 /* =========================
    Activation Functions
+   (names chosen to match other code)
 ========================= */
 export const saveActivationCode = async (code) => {
   const db = await initDB();
